@@ -127,16 +127,20 @@ check_type(T1, T2) :-
 check(Env, X, T1) :- atom(X), lookup(Env, X, T2, _), !, check_type(T1, T2), !.
 check(_, N, int) :- number(N), !.
 
+% check(Env, macro(Exp), list(sexp) -> sexp).
+check(Env, app(macro,_), (list(sexp) -> sexp) -> macroexpander) :- !.
+
 
 %% remplace les ? par le bon type
-check(Env, app(tapp(X,?),E), T) :-
-    print_message(debug('a'),checking()),
-    check(Env, E, T_E), !, check(Env, app(tapp(X,T_E),E), T), !,
-    print_message(debug('a'),here(app(tapp(X,T_E),E))).
+% check(Env, app(tapp(X,?),E), T) :-
+%     print_message(debug('a'),checking()),
+%     check(Env, E, T_E), check(Env, app(tapp(X,T_E),E), T_),
+%     print_message(debug('a'),here_type_inf(T_)), T = T_,
+%     print_message(debug('a'),here_suite(app(tapp(X,T_E),E))).
 
-check(Env, app(E,tapp(X,?)), T) :-
-    check(Env, E, T_E), !, check(Env, app(E,tapp(X,int)), T), !,
-    print_message(debug('a'),here_autre_sens(app(E,tapp(X,T_E)))).
+% check(Env, app(E,tapp(X,?)), T) :-
+%     check(Env, E, T_E), !, check(Env, app(E,tapp(X,int)), T), !,
+%     print_message(debug('a'),here_autre_sens(app(E,tapp(X,T_E)))).
 
 %% 3
 check(Env, if(E,E1,E2), T) :-
@@ -176,25 +180,36 @@ check(Env, fn(X,E), T) :-
 %     subst(T2,A,T_E2,T), !.
 
 
-check(Env, app(E1,E2), T2) :-
-    print_message(debug('check'), checling(app(E1,E2))),
-    atom(E2), (lookup(Env, E, _, temp) ->
-        check(Env, E1, T1 -> T2);
-        check(Env, E2, T1), !, check(Env, E1, T1 -> T2), !).
+% check(Env, app(E1,E2), T2) :-
+%     print_message(debug('check'), checling(app(E1,E2))),
+%     atom(E2), (lookup(Env, E, _, temp), ! ->
+%         check(Env, E1, T1 -> T2), !;
+%         check(Env, E2, T1), !, check(Env, E1, T1 -> T2), !), !.
 
 
 % t ::= ct | list(t) | t1 -> t2 | a | forall(a,t)
 
-check(Env, app(E1,E2), T) :-
-    print_message(debug('check'), checling(app0(app(E1,E2)))),
-    check(Env, E2, T1), check(Env, E1, T1 -> forall(X,E)),
-    T = forall(X,E),
-    print_message(debug('check'), checling(app(E1,E2))).
+% check(Env, app(E1,E2), T) :-
+%     print_message(debug('check'), checling(app0(app(E1,E2)))),
+%     check(Env, E2, T1),!, check(Env, E1, T1 -> forall(X,E)),!,
+%     T = forall(X,E),
+%     print_message(debug('check'), checling(app(E1,E2))).
 
 check(Env, app(E1,E2), T2) :-
     print_message(debug('check'), checling(app())),
-    check(Env, E2, T1), !, check(Env, E1, T1 -> T2), !,
-    print_message(debug('check'), checling(app(E1,E2))).
+    check(Env, E2, T1), !,
+    print_message(debug('a'),type_T1(T1)),
+    subst(E1,?,T1,E1_),
+    print_message(debug('check'), type_subst(E1_)),
+    % check(Env, E1, T1 -> T2), !,
+    check(Env, E1_, T), !,
+    print_message(debug('a'),trouve_type_app(T)),
+    print_message(debug('a'),check_app0(T,T1,T2)),
+    check_app(Env, T,T1,T2_), !, T2 = T2_.
+    % (T = (T1 -> T2) ->
+    %     print_message(debug('a'),trouve_forall(T1,T2))),
+    % print_message(debug('check'), checling(app(E1,E2))).
+
 
 
 %% 6
@@ -215,7 +230,8 @@ check(Env, tfn(A,fn(X,E)), forall(A, A -> T)) :-
     
 check(Env, tapp(E,T1), T) :-
     lookup(Env, E, forall(A,T2), _), !,
-    subst(T2,A,T1,P), !, T = P.
+    subst(T2,A,T1,P), !, T = P,
+    print_message(debug('a'),fin_check_sub(T)).
 
 %% 8
 check(_, quote(_), sexp).
@@ -230,10 +246,25 @@ check(Env, T1 -> T2, type) :- check(Env, T1, type), check(Env, T2, type), !.
 check(Env, forall(A,T), type) :-
     NewEnv = [(A,type,type)|Env], check(NewEnv, T, type), !. %% ajout de A dans Env ????
 
-%check(_,_,_).
+check(_,_,_).
 check(_,E,_) :- %%print_message(debug('check'),check_vide), !. %% En attendant, accepter n'importe quoi!
     print_message(error, check_error(E)), fail.
 
+
+% check_app(Env, forall(X,E), T1, T) :-
+%     print_message(debug('a'),check_app1(X,E)),
+%     subst(E,X,T1,T2), !, T = T2.
+
+check_app(_, forall(X,E), T1, T) :-
+    print_message(debug('a'),check_app1(X,E)),
+    subst(E,X,T1,T2), !, T = T2.
+
+check_app(Env, T1 -> T2, T1_, T) :-
+    lookup(Env, T1_, _, temp) -> T = T2.
+
+check_app(_,T1 -> T2,T1,T) :-
+    print_message(debug('a'),check_app2(T1,T2)),
+    T = T2.
 
 
 %% elaborate(+Env, +Exp, -NewExp)
@@ -243,6 +274,14 @@ check(_,E,_) :- %%print_message(debug('check'),check_vide), !. %% En attendant, 
 %% - ajout des instantiations de types.                         %% instancie la fonction polymorphe au type adapté ([T/a])
 
 elaborate(_, Exp, Exp) :- number(Exp).
+
+% macros
+%elaborate(Env, macro(X), NewExp) :- elaborate(Env, X, NewExp).
+
+elaborate(Env, Exp, NewExp) :-
+    Exp =.. [X|Args],
+    lookup(Env,X,(list(sexp) -> sexp) -> macroexpander,V), ! ->
+    print_message(debug('SF'), macro_expanding(V)).
 
 %% list
 elaborate(Env, list(T), list(T_)) :-
@@ -300,7 +339,7 @@ elaborate(_, Exp, Exp) :- atom(Exp).
 %% fonction type polymorphe
 elaborate(Env, Exp, NewExp) :-
     Exp =.. [Head|Args], Args = [E1|ES], elaborate(Env, E1, E1_),
-    (lookup(Env, Head, forall(_,_), _), ! ->
+    (lookup(Env, Head, forall(_,_), V), ! ->
         % print_message(debug('sss'), branch1(Exp, Head, Args)), 
         elim_suc(Env, app(tapp(Head,?), E1_), ES, NewExp);
         % print_message(debug('sss'), branch2(Exp, Head, Args)),
@@ -317,7 +356,7 @@ elim_suc(_, Exp, [], Exp). %% :- print_message(debug(''),fin_elim(Exp)), !.
 elim_suc(Env, Exp, [E|ES], NewExp) :-
     print_message(debug('dd'),elim_suc(Exp)),
     (elaborate(Env, E, NewE) ->
-        (lookup(Env, NewE, _, _) ->
+        (lookup(Env, NewE, _, V) ->
             elim_suc(Env, app(Exp, tapp(NewE,?)), ES, NewExp), !;
             elim_suc(Env, app(Exp, NewE), ES, NewExp) ,!);
         (lookup(Env, E, _, _) ->
@@ -389,24 +428,26 @@ env0(Env) :-
 %% pervasive(-Decls)
 %% Renvoie un exemple de déclarations.
 pervasive(
-        [define(zero, 0),
-         define(zero_0, app(app(+, zero), zero)),
-         define(id_int, fn(i, app(app(+, i), zero))),
-         define(zero_1, app(id_int, zero)),
-         identity : forall(t, (t -> t)),
-         define(identity, tfn(t, fn(x,x))),
-         define(zero_2, identity(zero)),
-         zero_2+zero_1
+        % [define(zero, 0),
+        %  define(zero_0, app(app(+, zero), zero)),
+        %  define(id_int, fn(i, app(app(+, i), zero))),
+        %  define(zero_1, app(id_int, zero)),
+        %  identity : forall(t, (t -> t)),
+        %  define(identity, tfn(t, fn(x,x))),
+        %  zero_2+zero_1
+        %  define(zero_2, identity(zero)),
          %% Pour pouvoir écrire "mklist(1,2,3)".
-        %  define(mklist,
-        %         macro(fn(args,
-        %                  makenode(quote(cons),
-        %                           cons(car(args),
-        %                                cons(if(empty(cdr(args)),
-        %                                        quote(nil),
-        %                                        makenode(quote(mklist),
-        %                                                 cdr(args))),
-        %                                     nil))))))
+         [define(mklist,
+                macro(fn(args,
+                         makenode(quote(cons),
+                                  cons(car(args),
+                                       cons(if(empty(cdr(args)),
+                                               quote(nil),
+                                               makenode(quote(mklist),
+                                                        cdr(args))),
+                                            nil)))))),
+        mklist(1,2,3)
+        % 1+1
         %  %% Pas aussi pratique que quasiquote/unquote, mais quand même
         %  %% un peu mieux que just "makenode".
         %  define(makeqnode,

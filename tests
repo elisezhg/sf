@@ -1,0 +1,14 @@
+runraw([define(f, fn(x, x)), f(1)], V). % 1
+runraw([define(f, (fn(z, (fn(y, fn(x, y)))))), f(1, 2, 3)], V). % 2CCC
+runraw([define(f, ((fn(y, fn(x, y))))), f(1, 2)], V). % 1
+runraw([+(1,41)], V). % 42
+runraw([+(1,(+(11,1)))], V). % 13
+runraw([define(plus, (fn(y, fn(x, app(app(+, x), y))))), plus(23, 17)], V).
+runraw([if(true,4,5)], V).
+
+runraw([cons(1, cons(2, nil))], V).
+runraw([cons(nil, cons(cons(1, cons(2, nil)), nil))], V).
+runraw([cons(cons(1, cons(2, nil)), nil)], V).
+
+ runraw([define(test_bool, fn(x,if(x,4,5))), test_boof(true)], V).
+runraw([(cons(nil, (cons(cons(cons(cons(cons(cons(cons(cons(cons(cons(3, nil), nil), nil), nil), nil), nil), nil), nil), nil), nil))))], V).
